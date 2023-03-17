@@ -3,13 +3,13 @@ from bs4 import BeautifulSoup
 from csv import writer, QUOTE_ALL
 
 
-def main():
+def lastfm_scraper():
     csv_file_name = 'lastfm.csv'
     tags = ['rock', 'hip-hop', 'indie', 'jazz', 'reggae', 'british', 'punk', '80s', 'dance', 'electronic', 'metal',
             'acoustic', 'rnb', 'hardcore', 'country', 'blues', 'alternative', 'classical', 'rap', 'country', 'composer',
             'modern classical', 'neoclassical', 'post-punk', 'russian']
-    tag, page, album_start, album_end = tags[-1], 1, 0, 20
-    for page in range(1, 10):
+    tag, page, album_start, album_end = tags[-3], 1, 0, 2
+    for page in range(1, 2):
         fm_url = f'https://www.last.fm/tag/{tag}/albums?page={page}'
         fm_page = get(fm_url)
         fm_soup = BeautifulSoup(fm_page.text, 'lxml')
@@ -23,16 +23,13 @@ def main():
             album_cover = album.find_all('img')[0].get('src')
             album_aux_text = album.find_all('p', class_='resource-list--release-list-item-aux-text')
             album_listeners = album_aux_text[0].get_text().strip()
-            album_release_date = album_tracks_num = None
-            if len(album_aux_text) > 1:
-                album_release_date, album_tracks_num = map(str.strip, album_aux_text[1].get_text().strip().split('\n'))
             album_page = get(album_href)
             album_soup = BeautifulSoup(album_page.text, 'lxml')
             album_meta = album_soup.find_all('ul', class_='header-metadata-tnew')
             album_counters = album_meta[0].find_all('abbr')
             album_scrobbles = album_counters[1].get('title')
             print(f'name: {album_name}\nartist: {album_artist}\ncover: {album_cover}\nlisteners: {album_listeners}')
-            print(f'release date: {album_release_date}\ntracks num: {album_tracks_num}\nscrobbles: {album_scrobbles}')
+            print(f'scrobbles: {album_scrobbles}')
             album_catalogue = album_soup.find_all('dl', class_='catalogue-metadata')
             album_cat_length = album_cat_release_date = None
             if album_catalogue:
@@ -58,4 +55,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    lastfm_scraper()
