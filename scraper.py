@@ -4,6 +4,8 @@ from csv import writer, QUOTE_ALL
 from track import Track
 from album import Album
 from tqdm import tqdm
+from pickle import load, dump
+from os.path import exists
 
 
 class LastFMScraper:
@@ -11,15 +13,18 @@ class LastFMScraper:
             'acoustic', 'rnb', 'hardcore', 'country', 'blues', 'alternative', 'classical', 'rap', 'country', 'composer',
             'modern classical', 'neoclassical', 'post-punk', 'russian']
 
-    def __init__(self, csv_file_name, tag_indices=(0,), total_pages=1, album_pos_start=1,
-                 album_pos_end=2, verbose=False):
+    def __init__(self, csv_file_name, checkpoint_file_name='.lfm_checkpoint',
+                 tag_indices=None, total_pages=None, album_pos_start=None,
+                 album_pos_end=None, verbose=False):
         self.csv_file_name = csv_file_name
-        self.tags_indices = tag_indices
-        self.total_pages = total_pages
-        self.album_pos_start = album_pos_start
-        self.album_pos_end = album_pos_end
+        self.checkpoint_file_name = checkpoint_file_name
+        self.tags_indices = tag_indices if tag_indices else tuple(range(len(self.tags)))
+        self.total_pages = total_pages if total_pages else 25
+        self.album_pos_start = album_pos_start if album_pos_start else 1
+        self.album_pos_end = album_pos_end if album_pos_end else 20
         self.verbose = verbose
         self.data_container = list()
+        self.checkpoint = None
 
     @staticmethod
     def get_albums_data(tag, page):
@@ -110,35 +115,72 @@ class LastFMScraper:
         album.num = album_num
         return album
 
-    def save_data(self, album):
+    def write_csv_head(self):
+        with open(self.csv_file_name, 'w', newline='', encoding='utf-8') as csv_file:
+            csv_writer = writer(csv_file, delimiter=' ', quotechar='|', quoting=QUOTE_ALL)
+            csv_writer.writerow(['album href', 'album tag', 'album page', 'album num', 'album name', 'album artist',
+                                 'album cover href', 'album listeners', 'album scrobbles', 'album tracks_total',
+                                 'album length', 'album release date', 'track pos', 'track name', 'track duration',
+                                 'track listeners', 'track scrobbles', 'track href'])
+
+    def save_data(self, album, start_track_pos):
         if self.verbose:
             print(album)
-        for album_track in album.tracks_list:
+
+        for album_track in album.tracks_list[start_track_pos-1:]:
             with open(self.csv_file_name, 'a', newline='', encoding='utf-8') as csv_file:
                 csv_writer = writer(csv_file, delimiter=' ', quotechar='|', quoting=QUOTE_ALL)
-                csv_writer.writerow([album.tag, album.page, album.num, album.name, album.artist, album.cover,
-                                     album.listeners, album.scrobbles, album.tracks_total, album.length,
+                csv_writer.writerow([album.href, album.tag, album.page, album.num, album.name, album.artist,
+                                     album.cover, album.listeners, album.scrobbles, album.tracks_total, album.length,
                                      album.release_date, album_track.pos, album_track.name, album_track.duration,
                                      album_track.listeners, album_track.scrobbles, album_track.href])
-            self.data_container.append({'album tag': album.tag, 'album page': album.page,
-                                        'album num on page': album.num, 'album name': album.name,
-                                        'album artist': album.artist, 'album cover link': album.cover,
-                                        'album listeners': album.listeners, 'album scrobbles': album.scrobbles,
-                                        'album tracks total': album.tracks_total, 'album length': album.length,
-                                        'album release date': album.release_date, 'track pos': album_track.pos,
-                                        'track name': album_track.name, 'track duration': album_track.duration,
-                                        'track listeners': album_track.listeners,
-                                        'track scrobbles': album_track.scrobbles, 'track href': album_track.href})
+                self.checkpoint = {'csv': self.csv_file_name,
+                                   'last tag index': self.tags.index(album.tag),
+                                   'last page': album.page,
+                                   'last album num': album.num,
+                                   'last album href': album.href,
+                                   'last track pos': album_track.pos,
+                                   'last track href': album_track.href,
+                                   'tracks total': album.tracks_total}
+                with open(self.checkpoint_file_name, 'wb') as cp_file:
+                    dump(self.checkpoint, cp_file)
 
-    def process_data(self, album_tag, album_page):
+    def process_data(self, album_tag, album_page, start_album_num, start_track_pos):
         albums_data = self.get_albums_data(album_tag, album_page)
-        pbar = tqdm(enumerate(albums_data[self.album_pos_start - 1:self.album_pos_end], 1),
+        pbar = tqdm(enumerate(albums_data[start_album_num - 1:self.album_pos_end], start_album_num),
                     desc=f'Tag: {album_tag} | Page {album_page}',
-                    total=self.album_pos_end - self.album_pos_start + 1)
+                    total=self.album_pos_end - start_album_num + 1)
         for album_num, album_data in pbar:
-            self.save_data(self.get_album(album_data, album_tag, album_page, album_num))
+            self.save_data(self.get_album(album_data, album_tag, album_page, album_num), start_track_pos)
+            start_track_pos = 1
 
     def run(self):
-        for album_tag_index in self.tags_indices:
-            for album_page in range(1, self.total_pages + 1):
-                self.process_data(self.tags[album_tag_index], album_page)
+        print('Searching checkpoint file...', end=' ')
+        if exists(self.checkpoint_file_name):
+            with open(self.checkpoint_file_name, 'rb') as cp_file:
+                self.checkpoint = load(cp_file)
+
+        if self.checkpoint:
+            print('checkpoint file found!')
+            print(self.checkpoint)
+        else:
+            print('checkpoint file not found! Starting scraping from scratch!')
+            print('Writing csv head...', end=' ')
+            self.write_csv_head()
+            print('ok!')
+
+        start_tag_index = self.checkpoint['last tag index'] if self.checkpoint else 0
+        start_page = self.checkpoint['last page'] if self.checkpoint else 1
+        start_album_num = self.checkpoint['last album num'] if self.checkpoint else 1
+        start_track_pos = self.checkpoint['last track pos'] + 1 if self.checkpoint else 1
+        print(f'Start tag index: {start_tag_index}')
+        print(f'Start page: {start_page}')
+        print(f'Start album number on the page: {start_album_num}')
+        print(f'Start track position in album: {start_track_pos}')
+
+        for album_tag_index in self.tags_indices[start_tag_index:]:
+            for album_page in range(start_page, self.total_pages + 1):
+                self.process_data(self.tags[album_tag_index], album_page, start_album_num, start_track_pos)
+                start_album_num = self.album_pos_start
+                start_track_pos = 1
+            start_page = 1
