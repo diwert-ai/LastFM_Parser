@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from csv import writer, QUOTE_ALL
 from track import Track
 from album import Album
+from tqdm import tqdm
 
 
 class LastFMScraper:
@@ -18,6 +19,7 @@ class LastFMScraper:
         self.album_pos_start = album_pos_start
         self.album_pos_end = album_pos_end
         self.verbose = verbose
+        self.data_container = list()
 
     @staticmethod
     def get_albums_data(tag, page):
@@ -50,17 +52,39 @@ class LastFMScraper:
         return album_length, album_tracks_total, album_release_date
 
     @staticmethod
-    def get_album_tracks_list(album_soup):
+    def get_track_scrobbles(track_href):
+        track_scrobbles = 0
+        track_page = get(track_href)
+        track_soup = BeautifulSoup(track_page.text, 'lxml')
+        track_data = track_soup.find_all('abbr')
+        if len(track_data) > 1:
+            track_scrobbles = int(track_data[1].get('title').strip().replace(',', ''))
+        return track_scrobbles
+
+    def get_album_tracks_list(self, album_soup):
         album_tracks_list = []
         album_tracks_list_data = album_soup.find_all('section', {'id': 'tracklist'})
         if album_tracks_list_data:
             album_tracks = album_tracks_list_data[0].find_all('tr', class_='chartlist-row')
             for track_pos, track in enumerate(album_tracks, 1):
+                track_href_tail = track.find_all('td', class_='chartlist-name')[0].find_all('a')[0].get('href')
+                track_href, track_scrobbles = None, 0
+                if track_href_tail:
+                    track_href = 'https://www.last.fm' + track_href_tail
+                    track_scrobbles = self.get_track_scrobbles(track_href)
                 track_duration = track.find_all('td', class_='chartlist-duration')[0].get_text().strip()
-                track_listeners = \
-                    int(track.find_all('td', class_='chartlist-bar')[0].get_text().strip().split()[0].replace(',', ''))
+                if self.verbose:
+                    print(f'track href: {track_href}')
+                    print(f'track scrobbles: {track_scrobbles}')
+                    print(f'processing chartlist-bar text: '
+                          f'{track.find_all("td", class_="chartlist-bar")[0].get_text().strip()}')
+                chart_list_bar_text = track.find_all("td", class_="chartlist-bar")[0].get_text().strip()
+                track_listeners = 0
+                if chart_list_bar_text:
+                    track_listeners = int(chart_list_bar_text.split()[0].replace(',', ''))
                 track_name = track.find_all('td', class_='chartlist-name')[0].get_text().strip()
-                album_tracks_list.append(Track(track_pos, track_name, track_duration, track_listeners))
+                album_tracks_list.append(Track(track_pos, track_name, track_duration,
+                                               track_listeners, track_scrobbles, track_href))
 
         return album_tracks_list
 
@@ -78,26 +102,41 @@ class LastFMScraper:
         album = Album(album_name, album_href, album_artist, album_cover, album_scrobbles, album_listeners,
                       album_tracks_total,
                       album_length, album_release_date)
+        if self.verbose:
+            print(f'album processing: {album_name}')
         album.tracks_list = self.get_album_tracks_list(album_soup)
         album.tag = album_tag
         album.page = album_page
         album.num = album_num
         return album
 
-    def save_to_csv(self, album):
+    def save_data(self, album):
         if self.verbose:
             print(album)
-        album_tracks = [track.to_tuple() for track in album.tracks_list]
-        with open(self.csv_file_name, 'a', newline='', encoding='utf-8') as csv_file:
-            csv_writer = writer(csv_file, delimiter=' ', quotechar='|', quoting=QUOTE_ALL)
-            csv_writer.writerow([album.tag, album.page, album.num, album.name, album.artist, album.cover,
-                                 album.listeners, album.scrobbles, album.tracks_total, album.length,
-                                 album.release_date, album_tracks])
+        for album_track in album.tracks_list:
+            with open(self.csv_file_name, 'a', newline='', encoding='utf-8') as csv_file:
+                csv_writer = writer(csv_file, delimiter=' ', quotechar='|', quoting=QUOTE_ALL)
+                csv_writer.writerow([album.tag, album.page, album.num, album.name, album.artist, album.cover,
+                                     album.listeners, album.scrobbles, album.tracks_total, album.length,
+                                     album.release_date, album_track.pos, album_track.name, album_track.duration,
+                                     album_track.listeners, album_track.scrobbles, album_track.href])
+            self.data_container.append({'album tag': album.tag, 'album page': album.page,
+                                        'album num on page': album.num, 'album name': album.name,
+                                        'album artist': album.artist, 'album cover link': album.cover,
+                                        'album listeners': album.listeners, 'album scrobbles': album.scrobbles,
+                                        'album tracks total': album.tracks_total, 'album length': album.length,
+                                        'album release date': album.release_date, 'track pos': album_track.pos,
+                                        'track name': album_track.name, 'track duration': album_track.duration,
+                                        'track listeners': album_track.listeners,
+                                        'track scrobbles': album_track.scrobbles, 'track href': album_track.href})
 
     def process_data(self, album_tag, album_page):
         albums_data = self.get_albums_data(album_tag, album_page)
-        for album_num, album_data in enumerate(albums_data[self.album_pos_start - 1:self.album_pos_end], 1):
-            self.save_to_csv(self.get_album(album_data, album_tag, album_page, album_num))
+        pbar = tqdm(enumerate(albums_data[self.album_pos_start - 1:self.album_pos_end], 1),
+                    desc=f'Tag: {album_tag} | Page {album_page}',
+                    total=self.album_pos_end - self.album_pos_start + 1)
+        for album_num, album_data in pbar:
+            self.save_data(self.get_album(album_data, album_tag, album_page, album_num))
 
     def run(self):
         for album_tag_index in self.tags_indices:
