@@ -23,7 +23,6 @@ class LastFMScraper:
         self.album_pos_start = album_pos_start if album_pos_start else 1
         self.album_pos_end = album_pos_end if album_pos_end else 20
         self.verbose = verbose
-        self.data_container = list()
         self.checkpoint = None
 
     @staticmethod
@@ -184,3 +183,5 @@ class LastFMScraper:
                 start_album_num = self.album_pos_start
                 start_track_pos = 1
             start_page = 1
+
+        return 'End!'
