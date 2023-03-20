@@ -10,7 +10,7 @@ from os.path import exists
 
 class LastFMScraper:
     tags = ['rock', 'hip-hop', 'indie', 'jazz', 'reggae', 'british', 'punk', '80s', 'dance', 'electronic', 'metal',
-            'acoustic', 'rnb', 'hardcore', 'country', 'blues', 'alternative', 'classical', 'rap', 'country', 'composer',
+            'acoustic', 'rnb', 'hardcore', 'country', 'blues', 'alternative', 'classical', 'rap', 'composer',
             'modern classical', 'neoclassical', 'post-punk', 'russian']
 
     def __init__(self, csv_file_name, checkpoint_file_name='.lfm_checkpoint',
