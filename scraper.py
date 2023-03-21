@@ -46,13 +46,22 @@ class LastFMScraper:
         album_catalogue = album_soup.find_all('dl', class_='catalogue-metadata')
         album_length = album_release_date = album_tracks_total = None
         if album_catalogue:
-            album_catalogue_data = album_catalogue[0].find_all('dd', class_='catalogue-metadata-description')
-            description_zero_split = album_catalogue_data[0].get_text().strip().split(',')
-            album_tracks_total = int(description_zero_split[0].strip().split()[0])
-            if len(description_zero_split) > 1:
-                album_length = description_zero_split[1].strip()
-            if len(album_catalogue_data) > 1:
-                album_release_date = album_catalogue_data[1].get_text().strip()
+            rl_dict = dict()
+            headings = album_catalogue[0].find_all('dt', class_='catalogue-metadata-heading')
+            descriptions = album_catalogue[0].find_all('dd', class_='catalogue-metadata-description')
+            for index, heading in enumerate(headings):
+                key = heading.get_text().strip()
+                value = descriptions[index].get_text().strip()
+                rl_dict[key] = value
+            length = rl_dict.get('Length', None)
+            if length:
+                album_tracks_total, album_length = length.split(',') if ',' in length else (length, None)
+                if album_tracks_total:
+                    album_tracks_total = int(album_tracks_total.split()[0])
+                if album_length:
+                    album_length = album_length.strip()
+            album_release_date = rl_dict.get('Release Date', None)
+
         return album_length, album_tracks_total, album_release_date
 
     @staticmethod
