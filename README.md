@@ -1,7 +1,7 @@
 # last.fm parser/scraper
 ## Homework #4 (HSE DPO DS Python course)
 
-- The parser traverses the album and tracks pages on https://last.fm and saves parsed data to csv file.
+- The parser traverses the albums (and tracks) pages on https://last.fm and saves parsed data to csv file.
 - The tags are retrieved from a following list: `tags = ['rock', 'hip-hop', 'indie', 'jazz', 'reggae', 'british', 'punk', 
 '80s', 'dance', 'electronic', 'metal', 'acoustic', 'rnb', 'hardcore', 'country', 'blues', 'alternative', 'classical',
 'rap', 'composer', 'modern classical', 'neoclassical', 'post-punk', 'russian']`.
