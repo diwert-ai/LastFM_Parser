@@ -6,8 +6,8 @@
 '80s', 'dance', 'electronic', 'metal', 'acoustic', 'rnb', 'hardcore', 'country', 'blues', 'alternative', 'classical',
 'rap', 'composer', 'modern classical', 'neoclassical', 'post-punk', 'russian']`.
 
-- For each tag, last.fm gives access to the first 25 pages. Each page features 20 albums. If an album has a track page,
-album and track information is saved to a csv file.
+- For each tag, last.fm gives access to the first 25 pages. Each page features 20 albums. If an album has a tracks page,
+album and tracks information is saved to a csv file.
 
 - The following information is saved in the csv file: `['album href', 'album tag', 'album page', 'album num', 
 'album name', 'album artist',
